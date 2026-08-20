@@ -1,6 +1,10 @@
-# Benzene Data Mesh — Top-Level Design
+# Benzene Data Products — Top-Level Design
 
 **Status:** Draft for review
+**Naming:** The product is **Benzene Data Products** (formerly "Benzene Data
+Mesh"). "Data mesh" appears below only when referring to the architectural
+paradigm the design draws on; the shorthand for the system itself is **the
+platform**.
 **Scope:** Top-level (system-of-systems) design. Each component named here gets its own
 detailed design document under `docs/design/components/`, produced in separate design
 sessions.
@@ -14,10 +18,11 @@ spreadsheets — and they want to make it available across the business. Today t
 means ad-hoc extracts, emailed spreadsheets, and point-to-point integrations with no
 ownership, no access control, and no visibility of who is using what.
 
-The Benzene Data Mesh solves this by providing:
+Benzene Data Products solves this by providing:
 
 - A **governed way to publish data**: a data owner registers a source once, and the
-  mesh takes care of connectivity, authentication to the source, and cataloguing.
+  platform takes care of connectivity, authentication to the source, and
+  cataloguing.
 - A **flexible way to consume data**: consumers choose *how* they receive data —
   JSON API, a Business Objects report, an Excel spreadsheet — without the owner
   having to build each channel.
@@ -30,12 +35,12 @@ The Benzene Data Mesh solves this by providing:
 
 ## 2. Terminology note (read this first)
 
-In this project the layer names describe the mesh's own perspective:
+In this project the layer names describe the platform's own perspective:
 
 | Term | Meaning in this project | Direction |
 | --- | --- | --- |
-| **Consumer Layer** | The mesh *consumes* data **from** configured data sources (Databricks, SQL, Excel, …) | Sources → Mesh |
-| **Producer Layer** | The mesh *produces* data **to** end users over their chosen channels (JSON API, BI, Excel, …) | Mesh → Users |
+| **Consumer Layer** | The platform *consumes* data **from** configured data sources (Databricks, SQL, Excel, …) | Sources → Platform |
+| **Producer Layer** | The platform *produces* data **to** end users over their chosen channels (JSON API, BI, Excel, …) | Platform → Users |
 
 This is the reverse of how "producer/consumer" is often used in data-mesh literature
 (where domains *produce* data products and users *consume* them). All documents in this
@@ -53,14 +58,15 @@ unambiguous synonyms **Ingestion side** (Consumer Layer) and **Delivery side**
    (hexagonal / ports-and-adapters). Business logic is host-agnostic; hosting behind
    ASP.NET Core, AWS Lambda, Azure Functions, or a self-hosted worker is a deployment
    decision, not a design decision. This applies the same philosophy to our own code
-   that the mesh applies to data: write once, expose through many adapters.
+   that the platform applies to data: write once, expose through many adapters.
 3. **Configuration over code.** Onboarding a new data source or a new consumption
    channel is configuration (stored in the configuration store), not a code change —
    until a genuinely new *connector type* or *channel type* is needed, which is a
    plug-in.
 4. **Trust the IdP, own the authorization.** Authentication is delegated to external
-   identity providers (OIDC/OAuth2). The mesh never manages passwords. Authorization —
-   who may consume what, at what grain — is the mesh's own responsibility and a
+   identity providers (OIDC/OAuth2). The platform never manages passwords.
+   Authorization —
+   who may consume what, at what grain — is the platform's own responsibility and a
    first-class component.
 5. **Everything metered.** No data leaves the Producer Layer without a consumption
    record being written. Metering is infrastructure, not an optional feature.
@@ -88,7 +94,7 @@ flowchart LR
         OTH[Other...]
     end
 
-    subgraph Mesh["Benzene Data Mesh"]
+    subgraph Platform["Benzene Data Products"]
         subgraph CL["Consumer Layer (Ingestion)"]
             CONN[Connector Adapters]
             SCFG[(Source Config Store)]
@@ -131,9 +137,9 @@ Request flow for a consumption (simplified):
    this data product through this channel, and under what constraints?*
 3. If permitted, the Producer Layer fulfils the request. Data is retrieved through the
    **Consumer Layer** connector for the underlying source (live query or from a
-   mesh-managed cache/snapshot, per the product's configuration).
+   platform-managed cache/snapshot, per the product's configuration).
 4. Constraints from the authorization decision (e.g. column masking, row filters, rate
-   or volume limits) are applied before data leaves the mesh.
+   or volume limits) are applied before data leaves the platform.
 5. A consumption event (who, what, how much, through which channel, when) is emitted
    to **Usage Metering**, which aggregates per user and business unit for chargeback.
 
@@ -153,7 +159,7 @@ Pulls data in from the data sources a customer configures.
 - **Source configuration store.** A database holding one record per configured data
   source: connector type, connection settings, refresh/caching policy, and ownership.
   Configuration is versioned and auditable.
-- **Authentication to sources.** The mesh authenticates *to* sources with credentials
+- **Authentication to sources.** The platform authenticates *to* sources with credentials
   or service principals held in a credential vault (referenced from configuration,
   never stored inline). Supports secrets, managed identities, and OAuth client
   credentials depending on source type.
@@ -183,7 +189,7 @@ Lets users consume data through the channel of their choice.
   (selected tables/columns), or a defined view/query over it. Shaping is configured,
   not coded.
 - **Serving strategy.** Per product: pass-through (live query to the source via the
-  Consumer Layer) or materialised (mesh-managed snapshot/cache with a refresh
+  Consumer Layer) or materialised (platform-managed snapshot/cache with a refresh
   schedule). This protects fragile sources (an Excel file) from consumer load.
 - Every response passes through the **constraint enforcement** step (from
   Authorization) and the **metering** emitter.
@@ -211,7 +217,7 @@ Decides which users or business groups can consume what data.
 
 ### 5.4 Authentication (federated) — part of `components/authorization.md`
 
-- The mesh runs **no identity store**. It trusts configured external identity
+- The platform runs **no identity store**. It trusts configured external identity
   providers (OIDC/OAuth2 — e.g. Entra ID, Okta). Tokens presented to any channel are
   validated against the trusted issuers; identity and group claims feed the
   authorization model. Service-to-service consumers use client-credential tokens
@@ -219,7 +225,7 @@ Decides which users or business groups can consume what data.
 
 ### 5.5 Data Catalog — `components/data-catalog.md`
 
-The shop window of the mesh.
+The shop window of the platform.
 
 - Shows **what data is available**, its schema and description, **who owns it**,
   **how it can be consumed** (available channels), its freshness/serving strategy,
@@ -360,7 +366,7 @@ Research inputs for all sessions: `docs/research/data-mesh-principles.md` and
 **Decided at this level:**
 
 - Ports-and-adapters throughout, on Benzene; hosting model deferred per deployment.
-- Authentication federated to external IdPs; authorization owned by the mesh with
+- Authentication federated to external IdPs; authorization owned by the platform with
   permit/deny + obligations semantics.
 - Ownership is mandatory in the domain model.
 - All consumption is metered; metering is the audit record.
